@@ -1,47 +1,62 @@
 # -*- coding: utf-8 -*-
 import os
-import json
-import time
+import sys
 import logging
-from datetime import datetime, date, timedelta
+from datetime import date, timedelta
+
+# Add project root to path for module discovery
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src import logger
 from src.utils import get_selected_powerplants, get_tgt, save_json
 from src.services import EpiasTransparencyerServices
 
+@logger
+def fetch_and_save_grt(service, tgt, start, end, pp_info):
+    """
+    Isolated function for a single powerplant fetch. 
+    The @logger decorator handles exceptions for each individual plant.
+    """
+    grt_id = pp_info.get("id")
+    name = pp_info.get("name")
+    
+    if grt_id is None:
+        logging.warning(f"Skipping: grt_id is missing for {name}")
+        return
+
+    # Call the service (now uses internal session and retries)
+    response = service.grt(tgt, start, end, grt_id)
+    
+    # .json() is called safely here because the service handles raise_for_status()
+    if response:
+        save_json(response.json(), f"data/selected_powerplants_data/{name}_{grt_id}.json")
+        logging.info(f"Saved data for: {name}")
+
 def main() -> None:
+    # 1. Setup Dates
     start_date = str(date.today() - timedelta(days=7))
     end_date = str(date.today() - timedelta(days=1))
+    logging.info(f"Data Collection Range: {start_date} to {end_date}")
 
-    # start_date = "2024-08-20"
-    # end_date = "2024-08-21"
-
-    logging.info(f"Start Date: {start_date}  End Date: {end_date}")
-
+    # 2. Initialization
     tgt = get_tgt()
-    epias_services = EpiasTransparencyerServices()
+    if not tgt:
+        logging.error("No TGT found. Run fetch_tgt.py first.")
+        return
 
-    pps_info = get_selected_powerplants()
-
+    service = EpiasTransparencyerServices()
+    pps_list = get_selected_powerplants()
     os.makedirs("data/selected_powerplants_data/", exist_ok=True)
 
-    for index, pp_info in enumerate(pps_info):
-        grt_id = pp_info.get("id")
-        name = pp_info.get("name")
+    # 3. Main Loop
+    for index, pp_info in enumerate(pps_list):
+        print(f"[{index:03d}] Processing: {pp_info.get('name')}")
         
-        print(f"{str(index).zfill(3)} - {str(grt_id).zfill(4)} - Santral: {name}")
+        # We call the decorated function. If it fails, the loop continues.
+        fetch_and_save_grt(service, tgt, start_date, end_date, pp_info)
         
-        if (grt_id is not None):
-
-            pp_grt = epias_services.grt(tgt, start_date, end_date, grt_id)
-            if pp_grt.status_code in [200, 201]:
-                save_json(pp_grt.json(), f"data/selected_powerplants_data/{name}_{grt_id}.json")
-                logging.info(f"Successful Response for index: {index} & grt_id: {grt_id} & name: {name}")
-            else:
-                save_json({"Error": pp_grt.text}, f"data/selected_powerplants_data/error_{name}_{grt_id}.json")
-                logging.error(f"Response Error for index: {index} & grt_id: {grt_id} & name: {name}")
-        else:
-            logging.error(f"grt_id is none for index: {index} & name: {name}")
-        time.sleep(2)
+        # Note: time.sleep(2) is removed because the retry strategy 
+        # in services.py handles "politeness" and backoffs automatically.
 
 if __name__ == "__main__":
     main()
-

@@ -1,5 +1,5 @@
 # Data Retrieval from EPIAS Transparency API
-Sample code to retrieve and save data from EPİAŞ Transparency API of Türkiye Electricity Market, that uses requests library.
+Retrieve and save data from EPİAŞ Transparency API of Türkiye Electricity Market, that uses requests library.
 For more info there is API documentation in here: https://seffaflik-prp.epias.com.tr/electricity-service/technical/tr/index.html
 
 ## How to Use

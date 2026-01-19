@@ -9,10 +9,14 @@ def get_selected_powerplants():
     with open("data/selected_powerplants.json", "r", encoding="utf8") as f:
         return json.load(f).get("powerplants_info")
 
-def get_tgt() -> str:
-    """
-    Get 'data/tgt.json' data
-    """
-    with  open("data/tgt.json", "r", encoding="utf8") as f:
-        tgt = json.load(f)
-    return tgt.get("tgt")
+def get_tgt() -> Optional[str]:
+    try:
+        with open("data/tgt.json", "r", encoding="utf8") as f:
+            data = json.load(f)
+            return data.get("tgt")
+    except FileNotFoundError:
+        logging.warning("tgt.json not found. Please run fetch_tgt.py first.")
+        return None
+    except json.JSONDecodeError:
+        logging.error("tgt.json is corrupted.")
+        return None

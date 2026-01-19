@@ -3,14 +3,32 @@ import os
 import requests
 from dotenv import load_dotenv
 from typing import Optional, Dict, Any, Union
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 load_dotenv()
 
 class EpiasTransparencyerServices:
     def __init__(self):
         self.main_url = "https://seffaflik.epias.com.tr/electricity-service"
-        # Using a session for connection pooling (better performance)
+        
+        # 1. Setup the Session
         self.session = requests.Session()
+        
+        # 2. Configure the Retry Strategy
+        retry_strategy = Retry(
+            total=3,                          # Total number of retries
+            backoff_factor=1,                 # Wait 1s, 2s, 4s between attempts
+            status_forcelist=[429, 500, 502, 503, 504], # Retry on these status codes
+            allowed_methods=["POST", "GET"]   # EPIAS uses POST for data retrieval
+        )
+        
+        # 3. Mount the adapter to the session
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
+
+        # 4. Standard Headers
         self.session.headers.update({
             "Accept-Language": "en",
             "Accept": "application/json",
@@ -35,10 +53,25 @@ class EpiasTransparencyerServices:
         return requests.post(url, headers=headers, data=data)
 
     def _post(self, endpoint: str, tgt: str, payload: Dict[str, Any]) -> requests.Response:
-        """Internal helper to minimize code duplication."""
         url = f"{self.main_url}/{endpoint}"
         headers = {"TGT": tgt}
-        return self.session.post(url, headers=headers, json=payload)
+        try:
+            # Added timeout to prevent scripts from hanging indefinitely
+            response = self.session.post(url, headers=headers, json=payload, timeout=30)
+            
+            # This will raise a requests.exceptions.HTTPError if status is not 2xx
+            response.raise_for_status() 
+            return response
+            
+        except requests.exceptions.HTTPError as http_err:
+            logging.error(f"HTTP error occurred: {http_err} - Content: {response.text}")
+            raise
+        except requests.exceptions.Timeout:
+            logging.error("The request timed out.")
+            raise
+        except Exception as err:
+            logging.error(f"An unexpected error occurred: {err}")
+            raise
 
     def _format_dates(self, start: str, end: str) -> Dict[str, str]:
         """Helper to format dates for EPIAS API."""

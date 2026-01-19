@@ -3,10 +3,15 @@ import logging
 import functools
 import requests
 from datetime import date
+from pathlib import Path
 
-os.makedirs("logs", exist_ok=True)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+LOG_DIR = PROJECT_ROOT / "logs"
 
-log_filename = f"logs/{date.today()}.log"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+log_filename = LOG_DIR / f"{date.today()}.log"
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -19,7 +24,6 @@ logging.basicConfig(
 def logger(func):
     """
     A robust decorator that logs function entry, exit, and any exceptions.
-    Uses functools.wraps to preserve function metadata (like __name__).
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -38,7 +42,6 @@ def logger(func):
         except requests.exceptions.Timeout:
             logging.error(f"Timeout Error in {func_name}: The request timed out.")
         except Exception as e:
-            # exc_info=True adds the full stack trace to the log file for debugging
             logging.error(f"Unexpected error in {func_name}: {str(e)}", exc_info=True)
             
         return None

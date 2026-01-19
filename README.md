@@ -5,8 +5,8 @@ For more info there is API documentation in here: https://seffaflik-prp.epias.co
 ## How to Use
 Clone the repo
 ```shell
-git clone https://github.com/zereaykut/Requests-EPIAS
-cd Requests-EPIAS
+git clone https://github.com/zereaykut/EPIAS-Transparency-API.git
+cd EPIAS-Transparency-API
 ```
 
 Create python environment

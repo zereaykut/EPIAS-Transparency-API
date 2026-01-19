@@ -30,6 +30,6 @@ pip install -r requirements.txt
 
 Add your EPIAS Tranparency info to a .env file like below
 ```config
-USERNAME_=your_username
-PASSWORD_=your_password
+EPIAS_TRANSPARENCY_USERNAME=your_username
+EPIAS_TRANSPARENCY_PASSWORD=your_password
 ```

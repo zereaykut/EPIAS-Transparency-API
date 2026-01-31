@@ -35,82 +35,171 @@ class EpiasTransparencyerServices:
             "Content-Type": "application/json",
         })
 
-    @staticmethod
-    def tgt() -> requests.Response:
-        """
-        EPIAS Seffaflik Ticket Granting Ticket (TGT) Servisi
-        Note: This is static as it doesn't require main_url
-        """
-        url = "https://giris.epias.com.tr/cas/v1/tickets"
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Accept": "application/json",
-        }
-        data = {
-            "username": os.getenv("EPIAS_TRANSPARENCY_USERNAME"),
-            "password": os.getenv("EPIAS_TRANSPARENCY_PASSWORD"),
-        }
-        return requests.post(url, headers=headers, data=data)
-
     def _post(self, endpoint: str, tgt: str, payload: Dict[str, Any]) -> requests.Response:
+        """Internal helper to send POST requests with TGT header."""
         url = f"{self.main_url}/{endpoint}"
-        headers = {"TGT": tgt}
-        try:
-            # Added timeout to prevent scripts from hanging indefinitely
-            response = self.session.post(url, headers=headers, json=payload, timeout=30)
-            
-            # This will raise a requests.exceptions.HTTPError if status is not 2xx
-            response.raise_for_status() 
-            return response
-            
-        except requests.exceptions.HTTPError as http_err:
-            logging.error(f"HTTP error occurred: {http_err} - Content: {response.text}")
-            raise
-        except requests.exceptions.Timeout:
-            logging.error("The request timed out.")
-            raise
-        except Exception as err:
-            logging.error(f"An unexpected error occurred: {err}")
-            raise
+        headers = {"TGT": tgt} if tgt else {}
+        # Merge specific headers with session headers
+        request_headers = self.session.headers.copy()
+        request_headers.update(headers)
+        
+        return self.session.post(url, json=payload, headers=request_headers)
 
-    def _format_dates(self, start: str, end: str) -> Dict[str, str]:
-        """Helper to format dates for EPIAS API."""
-        return {
-            "startDate": f"{start}T00:00:00+03:00",
-            "endDate": f"{end}T23:00:00+03:00"
-        }
+    def _format_dates(self, start_date: str, end_date: str) -> Dict[str, str]:
+        """Internal helper to format date payload."""
+        return {"startDate": start_date, "endDate": end_date}
 
+    # ==========================================
+    # 5. CONSUMPTION (TÜKETİM) SERVICES
+    # ==========================================
+
+    def eligible_consumer_count(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """5.1. Tüketici Sayısı Listeleme Servisi (Eligible Consumer Count)"""
+        payload = self._format_dates(start_date, end_date)
+        return self._post("v1/consumption/data/eligible-consumer-count", tgt, payload)
+
+    def profile_group_list(self, tgt: str) -> requests.Response:
+        """5.2. Profil Grubu Listeleme Servisi (Profile Group List)"""
+        return self._post("v1/consumption/data/profile-group-list", tgt, {})
+
+    def consumption_quantity(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """5.3. Tüketim Miktarları Listeleme Servisi (Realized Consumption)"""
+        payload = self._format_dates(start_date, end_date)
+        return self._post("v1/consumption/data/realized-consumption", tgt, payload)
+
+    def demand_forecast(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """5.4. Talep Tahmini Listeleme Servisi (Load Estimation Plan)"""
+        payload = self._format_dates(start_date, end_date)
+        return self._post("v1/consumption/data/load-estimation-plan", tgt, payload)
+
+    def distribution_regions(self, tgt: str) -> requests.Response:
+        """5.5. Dağıtım Bölgesi Servisi (Distribution Regions)"""
+        return self._post("v1/consumption/data/distribution-region-list", tgt, {})
+
+    def eligible_consumer_quantity(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """5.7. Serbest Tüketici Tüketim Miktarı Listeleme Servisi (Eligible Consumer Quantity)"""
+        payload = self._format_dates(start_date, end_date)
+        return self._post("v1/consumption/data/eligible-consumer-quantity", tgt, payload)
+
+    def real_time_consumption(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """Gercek Zamanli Tuketim Servisi"""
+        payload = self._format_dates(start_date, end_date)
+        return self._post("v1/consumption/data/realtime-consumption", tgt, payload)
+
+    def ue_consumption(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """UE Tüketim Miktarı (Under Supply Consumption)"""
+        payload = self._format_dates(start_date, end_date)
+        return self._post("v1/consumption/data/ue-consumption", tgt, payload)
+
+    # ==========================================
+    # 6. PRODUCTION (ÜRETİM) SERVICES
+    # ==========================================
+
+    def info_powerplant_list(self, tgt: str) -> requests.Response:
+        """Santral Listeleme Servisi (Powerplant List)"""
+        return self._post("v1/production/data/powerplant-list", tgt, {})
+
+    def installed_capacity(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """Kurulu Güç Listeleme Servisi (Installed Capacity)"""
+        payload = self._format_dates(start_date, end_date)
+        return self._post("v1/production/data/installed-capacity", tgt, payload)
+
+    def real_time_generation(self, tgt: str, start_date: str, end_date: str, powerplant_id: Union[int, None] = None) -> requests.Response:
+        """Gercek Zamanli Uretim (GZUP) Servisi (Real Time Generation)"""
+        payload = self._format_dates(start_date, end_date)
+        if powerplant_id:
+            payload["powerPlantId"] = powerplant_id
+        return self._post("v1/production/data/real-time-generation", tgt, payload)
+
+    def dpp(self, tgt: str, start_date: str, end_date: str, organization_id: Union[int, None] = None, powerplant_id: Union[int, None] = None) -> requests.Response:
+        """KUDUP (DPP) Listeleme Servisi"""
+        payload = self._format_dates(start_date, end_date)
+        if organization_id:
+            payload["organizationId"] = organization_id
+        if powerplant_id:
+            payload["powerPlantId"] = powerplant_id
+        return self._post("v1/production/data/dpp", tgt, payload)
+
+    def sfy_capacity(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """SFY Kapasite Listeleme Servisi (AIC)"""
+        payload = self._format_dates(start_date, end_date)
+        return self._post("v1/production/data/aic", tgt, payload)
+
+    def fault_maintenance(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """Arıza Bakım Bildirimleri (Fault-Maintenance)"""
+        payload = self._format_dates(start_date, end_date)
+        return self._post("v1/production/data/fault-maintenance", tgt, payload)
+
+    # ==========================================
+    # 7. MARKET (PİYASALAR) SERVICES
+    # ==========================================
+
+    # --- DAM (GÖP) ---
     def mcp(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
-        """Piyasa Takas Fiyati (PTF) Servisi"""
+        """PTF Listeleme Servisi (MCP - Market Clearing Price)"""
         payload = self._format_dates(start_date, end_date)
         return self._post("v1/markets/dam/data/mcp", tgt, payload)
 
-    def smp(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
-        """Sistem Marjinal Fiyati (SMF) Servisi"""
+    def dam_volume(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """GÖP Eşleşme Miktarı (DAM Trade Volume)"""
         payload = self._format_dates(start_date, end_date)
-        return self._post("v1/markets/bpm/data/smp", tgt, payload)
+        return self._post("v1/markets/dam/data/amount-of-cleared-from-match", tgt, payload)
 
-    def real_time_generation(self, tgt: str, start_date: str, end_date: str, powerplant_id:Union[int,None]=None) -> requests.Response:
-        """Gercek Zamanli Uretim (GZUP) Servisi"""
+    def dam_bid_offer(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """GÖP Teklif Edilen Alış/Satış Miktarları"""
         payload = self._format_dates(start_date, end_date)
-        payload["powerPlantId"] = powerplant_id
-        return self._post("v1/production/data/real-time-generation", tgt, payload)
+        return self._post("v1/markets/dam/data/submitted-bid-offer-volume", tgt, payload)
 
-    def real_time_consumption(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
-        """Gercek Zamanli Uretim (GZUP) Servisi"""
-        payload = self._format_dates(start_date, end_date)
-        return self._post("/v1/consumption/data/realtime-consumption", tgt, payload)
-
-    def info_powerplant_list(self, tgt: str) -> requests.Response:
-        """Santral Listeleme Servisi"""
-        return self._post("v1/production/data/powerplant-list", tgt, {})
-
+    # --- IDM (GİP) ---
     def idm_matching_quantity(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
-        """GIP Eslesme Miktari Listeleme Servisi"""
+        """GİP Eşleşme Miktarı Listeleme Servisi"""
         payload = self._format_dates(start_date, end_date)
         return self._post("v1/markets/idm/data/matching-quantity", tgt, payload)
 
-    def idm_min_max_bid_price(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
-        """GIP Min - Maks Alis Teklif Fiyati Listeleme Servisi"""
+    def idm_summary(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """GİP Özet Verileri (IDM Summary)"""
         payload = self._format_dates(start_date, end_date)
-        return self._post("v1/markets/idm/data/min-max-bid-price", tgt, payload)
+        return self._post("v1/markets/idm/data/summary", tgt, payload)
+
+    def idm_weighted_average_price(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """GİP Ağırlıklı Ortalama Fiyat (IDM Weighted Average Price)"""
+        payload = self._format_dates(start_date, end_date)
+        return self._post("v1/markets/idm/data/weighted-average-price", tgt, payload)
+
+    # --- BPM (DGP) ---
+    def smp(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """SMF Listeleme Servisi (SMP - System Marginal Price)"""
+        payload = self._format_dates(start_date, end_date)
+        return self._post("v1/markets/bpm/data/smp", tgt, payload)
+
+    def zero_balance(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """Sıfır Bakiye Düzeltme Tutarı (Zero Balance)"""
+        payload = self._format_dates(start_date, end_date)
+        return self._post("v1/markets/bpm/data/zero-balance", tgt, payload)
+
+    # ==========================================
+    # 8. TRANSMISSION (İLETİM) SERVICES
+    # ==========================================
+
+    def congestion_rent(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """Kısıt Kira Geliri (Congestion Rent)"""
+        payload = self._format_dates(start_date, end_date)
+        return self._post("v1/transmission/data/congestion-rent", tgt, payload)
+
+    def international_line_capacities(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """Uluslararası Hat Kapasiteleri (International Line Capacities)"""
+        payload = self._format_dates(start_date, end_date)
+        return self._post("v1/transmission/data/international-line-capacities", tgt, payload)
+
+    # ==========================================
+    # 9. YEK-G SERVICES
+    # ==========================================
+
+    def yek_g_list(self, tgt: str) -> requests.Response:
+        """YEK-G Santral Listesi"""
+        return self._post("v1/environmental-markets/yek-g/data/powerplant-list", tgt, {})
+
+    def yek_g_market_clearing_price(self, tgt: str, start_date: str, end_date: str) -> requests.Response:
+        """YEK-G Piyasası Takas Fiyatı"""
+        payload = self._format_dates(start_date, end_date)
+        return self._post("v1/environmental-markets/yek-g/data/mcp", tgt, payload)
